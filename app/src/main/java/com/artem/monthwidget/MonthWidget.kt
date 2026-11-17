@@ -9,9 +9,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
+import androidx.glance.LocalContext
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
@@ -113,6 +115,7 @@ private fun palette(s: Settings): Palette {
 private fun MonthContent(d: MonthData) {
     val s = d.settings
     val p = palette(s)
+    val openSettings = actionStartActivity(Intent(LocalContext.current, SettingsActivity::class.java))
 
     if (!d.hasPermission) {
         Box(
@@ -121,7 +124,7 @@ private fun MonthContent(d: MonthData) {
                 .background(p.bg)
                 .cornerRadius(16.dp)
                 .padding(12.dp)
-                .clickable(actionStartActivity<SettingsActivity>()),
+                .clickable(openSettings),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -143,7 +146,7 @@ private fun MonthContent(d: MonthData) {
             .cornerRadius(16.dp)
             .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
-        Header(plan, p, locale, s)
+        Header(plan, p, locale, s, openSettings)
         WeekdayRow(plan, p, locale, s)
 
         for (w in 0 until plan.weeks) {
@@ -167,7 +170,7 @@ private fun MonthContent(d: MonthData) {
 }
 
 @androidx.compose.runtime.Composable
-private fun Header(plan: Plan, p: Palette, locale: Locale, s: Settings) {
+private fun Header(plan: Plan, p: Palette, locale: Locale, s: Settings, openSettings: Action) {
     Row(
         modifier = GlanceModifier.fillMaxWidth().padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -191,7 +194,7 @@ private fun Header(plan: Plan, p: Palette, locale: Locale, s: Settings) {
         IconButton(R.drawable.ic_chevron_right, "Вперёд", p, actionRunCallback<ShiftAction>(
             actionParametersOf(ShiftAction.DIR to 1),
         ))
-        IconButton(R.drawable.ic_settings, "Настройки", p, actionStartActivity<SettingsActivity>())
+        IconButton(R.drawable.ic_settings, "Настройки", p, openSettings)
     }
 }
 
@@ -200,7 +203,7 @@ private fun IconButton(
     res: Int,
     description: String,
     p: Palette,
-    action: androidx.glance.action.Action,
+    action: Action,
 ) {
     Box(
         modifier = GlanceModifier.size(26.dp).clickable(action),
