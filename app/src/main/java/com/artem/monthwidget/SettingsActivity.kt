@@ -125,7 +125,7 @@ private fun SettingsScreen() {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Календарь-месяц") }) },
+        topBar = { TopAppBar(title = { Text("Календарь") }) },
     ) { pad ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(pad),
