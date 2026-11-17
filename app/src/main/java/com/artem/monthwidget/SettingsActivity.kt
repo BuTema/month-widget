@@ -90,6 +90,7 @@ private fun SettingsScreen() {
     var hasPerm by remember { mutableStateOf(CalendarRepo.hasPermission(ctx)) }
     var calendars by remember { mutableStateOf(emptyList<CalInfo>()) }
     var titles by remember { mutableStateOf(emptyList<TitleInfo>()) }
+    var update by remember { mutableStateOf<UpdateInfo?>(null) }
 
     var alphaDrag by remember { mutableFloatStateOf(settings.bgAlpha.toFloat()) }
 
@@ -102,6 +103,9 @@ private fun SettingsScreen() {
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasPerm = granted
     }
+
+    // Новая сборка на GitHub? Проверяется не чаще раза в час.
+    LaunchedEffect(Unit) { update = AppUpdater.check(ctx) }
 
     // Первый запуск после выдачи доступа: выставляем начальные включённые календари.
     LaunchedEffect(hasPerm) {
@@ -132,6 +136,18 @@ private fun SettingsScreen() {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            update?.let { u ->
+                item {
+                    UpdateCard(
+                        onLater = {
+                            AppUpdater.dismiss(ctx, u)
+                            update = null
+                        },
+                        onInstall = { AppUpdater.install(ctx, u) },
+                    )
+                }
+            }
+
             if (!hasPerm) {
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
@@ -260,6 +276,9 @@ private fun SettingsScreen() {
                     }
                 }
             }
+
+            item { Section("О приложении") }
+            item { AboutBlock() }
 
             item { Box(Modifier.size(24.dp)) }
         }

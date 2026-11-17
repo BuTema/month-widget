@@ -12,8 +12,22 @@ android {
         applicationId = "com.artem.monthwidget"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // Every CI build numbers itself; locally it stays 1.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0"
+        // The commit this build was made from (CI only); the app compares it with the latest release.
+        buildConfigField("String", "COMMIT", "\"${System.getenv("GITHUB_SHA")?.take(7) ?: "dev"}\"")
+    }
+
+    // A fixed, public "debug" keystore is committed on purpose: every CI build is signed with the
+    // same key, so a new APK installs over the previous one without uninstalling. The app holds no secrets.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -33,6 +47,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
