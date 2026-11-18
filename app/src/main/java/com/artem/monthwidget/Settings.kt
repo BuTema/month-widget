@@ -1,6 +1,11 @@
 package com.artem.monthwidget
 
 import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 
 /**
  * Настройки виджета. Один набор на все экземпляры виджета.
@@ -33,6 +38,22 @@ object Prefs {
     const val KEY_DISABLED_CALENDARS = "disabled_calendars"
 
     fun prefs(ctx: Context) = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+    /**
+     * Срабатывает при любой записи в настройки. На него подписана композиция виджета: Glance не
+     * пересобирает её по update(), пока она жива, так что виджет сам замечает новые данные.
+     */
+    fun changes(ctx: Context): Flow<Unit> = callbackFlow {
+        val p = prefs(ctx)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> trySend(Unit) }
+        p.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { p.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.conflate()
+
+    /** Заставляет открытые виджеты пересобраться: прошло время, сменилась дата, обновился календарь. */
+    fun poke(ctx: Context) {
+        prefs(ctx).edit().putLong("poke", System.currentTimeMillis()).apply()
+    }
 
     fun load(ctx: Context): Settings {
         val p = prefs(ctx)

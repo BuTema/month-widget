@@ -39,6 +39,7 @@ class MonthWidgetReceiver : GlanceAppWidgetReceiver() {
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.Default).launch {
                     try {
+                        Prefs.poke(context)
                         MonthWidget().updateAll(context)
                     } finally {
                         pending.finish()
@@ -53,6 +54,7 @@ class MonthWidgetReceiver : GlanceAppWidgetReceiver() {
 class RefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
+        Prefs.poke(applicationContext)
         MonthWidget().updateAll(applicationContext)
         return Result.success()
     }

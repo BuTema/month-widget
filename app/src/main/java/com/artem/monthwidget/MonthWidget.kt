@@ -3,6 +3,9 @@ package com.artem.monthwidget
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
@@ -44,6 +47,8 @@ import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -58,20 +63,35 @@ class MonthWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = withContext(Dispatchers.IO) {
-            CalendarRepo.ensureCalendarDefaults(context)
-            val settings = Prefs.load(context)
-            val today = LocalDate.now()
-            val plan = planFor(settings, today)
-            MonthData(
-                settings = settings,
-                plan = plan,
-                today = today,
-                hasPermission = CalendarRepo.hasPermission(context),
-                events = CalendarRepo.loadEvents(context, settings, plan),
-            )
+        val app = context.applicationContext
+        val initial = withContext(Dispatchers.IO) { buildData(app) }
+        provideContent {
+            // Glance держит эту композицию живой какое-то время, и update()/updateAll() за это время
+            // не перезапускают provideGlance, а значит данные, прочитанные выше, остались бы старыми.
+            // Поэтому виджет сам следит за настройками: стрелка месяца, смена опций, смена даты
+            // и синхронизация календаря (Prefs.poke) — всё это запись в настройки, и данные собираются заново.
+            val flow = remember {
+                Prefs.changes(app)
+                    .map { buildData(app) }
+                    .flowOn(Dispatchers.IO)
+            }
+            val data by flow.collectAsState(initial)
+            MonthContent(data)
         }
-        provideContent { MonthContent(data) }
+    }
+
+    private fun buildData(context: Context): MonthData {
+        CalendarRepo.ensureCalendarDefaults(context)
+        val settings = Prefs.load(context)
+        val today = LocalDate.now()
+        val plan = planFor(settings, today)
+        return MonthData(
+            settings = settings,
+            plan = plan,
+            today = today,
+            hasPermission = CalendarRepo.hasPermission(context),
+            events = CalendarRepo.loadEvents(context, settings, plan),
+        )
     }
 }
 
