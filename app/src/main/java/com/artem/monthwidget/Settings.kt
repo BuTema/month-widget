@@ -50,9 +50,20 @@ object Prefs {
         awaitClose { p.unregisterOnSharedPreferenceChangeListener(listener) }
     }.conflate()
 
-    /** Заставляет открытые виджеты пересобраться: прошло время, сменилась дата, обновился календарь. */
+    /**
+     * Данные календаря могли измениться (прошло время, сменилась дата, синхронизация): повышаем версию,
+     * кэш событий считается устаревшим, открытые виджеты пересобираются.
+     */
     fun poke(ctx: Context) {
-        prefs(ctx).edit().putLong("poke", System.currentTimeMillis()).apply()
+        val p = prefs(ctx)
+        p.edit().putInt("data_version", p.getInt("data_version", 0) + 1).apply()
+    }
+
+    fun dataVersion(ctx: Context): Int = prefs(ctx).getInt("data_version", 0)
+
+    /** Просто будит открытые виджеты (например, когда фоново подгрузились свежие события). */
+    fun tick(ctx: Context) {
+        prefs(ctx).edit().putLong("tick", System.nanoTime()).apply()
     }
 
     fun load(ctx: Context): Settings {

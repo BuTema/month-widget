@@ -40,7 +40,6 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
-import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -90,7 +89,7 @@ class MonthWidget : GlanceAppWidget() {
             plan = plan,
             today = today,
             hasPermission = CalendarRepo.hasPermission(context),
-            events = CalendarRepo.loadEvents(context, settings, plan),
+            events = CalendarRepo.eventsFor(context, settings, plan),
         )
     }
 }
@@ -297,8 +296,8 @@ private fun DayCell(
                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                 ),
             )
-            Spacer(modifier = GlanceModifier.defaultWeight())
             if (more > 0) {
+                Spacer(modifier = GlanceModifier.defaultWeight())
                 Text(
                     text = "+$more",
                     maxLines = 1,
@@ -349,10 +348,9 @@ private fun EventLine(ev: Ev, s: Settings, p: Palette, inFocus: Boolean) {
                     .background(ColorProvider(color))
                     .cornerRadius(2.dp),
             ) {}
-            Spacer(modifier = GlanceModifier.width(2.dp))
             Text(
                 text = ev.title,
-                modifier = GlanceModifier.defaultWeight(),
+                modifier = GlanceModifier.defaultWeight().padding(start = 2.dp),
                 maxLines = 1,
                 style = TextStyle(color = if (inFocus) p.text else p.dim, fontSize = size),
             )

@@ -168,16 +168,76 @@ object CalendarRepo {
         }
     }
 
-    /** События для клеток виджета: день -> отсортированный список. */
-    fun loadEvents(ctx: Context, s: Settings, plan: Plan): Map<LocalDate, List<Ev>> {
+    private class Snapshot(
+        val filterSig: String,
+        val version: Int,
+        val savedAt: Long,
+        val from: LocalDate,
+        val to: LocalDate,
+        val events: Map<LocalDate, List<Ev>>,
+    )
+
+    @Volatile
+    private var snapshot: Snapshot? = null
+    private val refreshing = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Читаем с запасом по краям, чтобы листать соседние месяцы без обращения к провайдеру календаря. */
+    private const val MARGIN_DAYS = 90L
+    private const val FRESH_MS = 5 * 60 * 1000L
+
+    private fun filterSignature(s: Settings): String =
+        "${s.disabledCalendars.sorted()}|${s.hiddenTitles.map(::normTitle).sorted()}|${s.hideDeclined}|${s.hideUnanswered}"
+
+    /**
+     * События для показа. Если окно в памяти покрывает нужные дни и фильтры те же — отдаём сразу
+     * (листание месяцев мгновенное); устаревшие данные показываем и обновляем в фоне.
+     */
+    fun eventsFor(ctx: Context, s: Settings, plan: Plan): Map<LocalDate, List<Ev>> {
+        if (!hasPermission(ctx)) return emptyMap()
+        val snap = snapshot
+        if (snap != null && snap.filterSig == filterSignature(s) &&
+            !plan.start.isBefore(snap.from) && !plan.end.isAfter(snap.to)
+        ) {
+            val stale = snap.version != Prefs.dataVersion(ctx) ||
+                System.currentTimeMillis() - snap.savedAt > FRESH_MS
+            if (stale) refreshInBackground(ctx.applicationContext, s, plan)
+            return snap.events
+        }
+        return reload(ctx, s, plan)
+    }
+
+    private fun reload(ctx: Context, s: Settings, plan: Plan): Map<LocalDate, List<Ev>> {
+        val version = Prefs.dataVersion(ctx)
+        val from = plan.start.minusDays(MARGIN_DAYS)
+        val to = plan.end.plusDays(MARGIN_DAYS)
+        val events = loadEvents(ctx, s, from, to)
+        snapshot = Snapshot(filterSignature(s), version, System.currentTimeMillis(), from, to, events)
+        return events
+    }
+
+    private fun refreshInBackground(app: Context, s: Settings, plan: Plan) {
+        if (!refreshing.compareAndSet(false, true)) return
+        kotlin.concurrent.thread(isDaemon = true) {
+            try {
+                reload(app, s, plan)
+                Prefs.tick(app) // виджет заметит запись и перерисуется со свежими данными
+            } catch (_: Exception) {
+            } finally {
+                refreshing.set(false)
+            }
+        }
+    }
+
+    /** События по дням в диапазоне [start, end]: день -> отсортированный список. */
+    private fun loadEvents(ctx: Context, s: Settings, start: LocalDate, end: LocalDate): Map<LocalDate, List<Ev>> {
         if (!hasPermission(ctx)) return emptyMap()
         val zone = ZoneId.systemDefault()
         val googleIds = googleCalendars(ctx).map { it.id }.toHashSet()
         val hidden = s.hiddenTitles.map(::normTitle).toHashSet()
 
         // С запасом в сутки по краям: «весь день» события хранятся в UTC.
-        val from = plan.start.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val to = plan.end.plusDays(2).atStartOfDay(zone).toInstant().toEpochMilli()
+        val from = start.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val to = end.plusDays(2).atStartOfDay(zone).toInstant().toEpochMilli()
 
         val byDay = HashMap<LocalDate, MutableList<Ev>>()
         forEachInstance(ctx, from, to) { r ->
@@ -204,8 +264,8 @@ object CalendarRepo {
             }
 
             val ev = Ev(r.eventId, r.title, r.color, r.allDay, r.begin)
-            var d = if (firstDay.isBefore(plan.start)) plan.start else firstDay
-            val stop = if (lastDay.isAfter(plan.end)) plan.end else lastDay
+            var d = if (firstDay.isBefore(start)) start else firstDay
+            val stop = if (lastDay.isAfter(end)) end else lastDay
             while (!d.isAfter(stop)) {
                 byDay.getOrPut(d) { ArrayList() }.add(ev)
                 d = d.plusDays(1)
