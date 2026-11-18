@@ -255,8 +255,12 @@ private fun DayCell(
     val shown = events.take(s.eventsPerDay)
     val more = events.size - shown.size
 
-    var cell = modifier.padding(1.dp)
-    if (isToday) cell = cell.background(p.todayTint).cornerRadius(6.dp)
+    // Фон задаём у каждой клетки (у остальных дней прозрачный): RemoteViews при обновлении накладывается
+    // на старые вью и не сбрасывает то, что не задано заново, — иначе подсветка вчерашнего дня остаётся.
+    val cell = modifier
+        .padding(1.dp)
+        .background(if (isToday) p.todayTint else ColorProvider(Color.Transparent))
+        .cornerRadius(6.dp)
 
     Column(modifier = cell.clickable(actionStartActivity(open))) {
         Row(modifier = GlanceModifier.fillMaxWidth().padding(horizontal = 2.dp)) {
